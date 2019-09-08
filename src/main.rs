@@ -12,6 +12,10 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use std::time::{Duration, Instant};
+use std::thread;
+use std::sync::mpsc;
+
+extern crate num_cpus;
 
 struct Schedule([__m128i; 20]);
 
@@ -141,61 +145,100 @@ fn simple_loop() {
     let plain: [u8; 16] = [0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34];
     let start = Instant::now();
     let s = schedule(&key);
-    let mut w = load128(&plain);
-    let mut w2 = load128(&plain);
-    let mut w3 = load128(&plain);
-    let mut w4 = load128(&plain);
-    let mut w5 = load128(&plain);
-    let mut w6 = load128(&plain);
-    let mut w7 = load128(&plain);
-    let mut w8 = load128(&plain);
-    const ITERATIONS: usize = 10000000;
-    for _ in 0..ITERATIONS/8 {
-        encm!(s, w);
-        encm!(s, w2);
-        encm!(s, w3);
-        encm!(s, w4);
-        encm!(s, w5);
-        encm!(s, w6);
-        encm!(s, w7);
-        encm!(s, w8);
+    const SBS: usize = 16;
+    let mut w = [load128(&plain); SBS];
+    const ITERATIONS: usize = 10000000/SBS;
+    for _ in 0..ITERATIONS {
+        for i in 0..SBS {
+            encm!(s, w[i]);
+        }
     }
-    for _ in 0..ITERATIONS/8 {
-        decm!(s, w);
-        decm!(s, w2);
-        decm!(s, w3);
-        decm!(s, w4);
-        decm!(s, w5);
-        decm!(s, w6);
-        decm!(s, w7);
-        decm!(s, w8);
+    for _ in 0..ITERATIONS {
+        for i in 0..SBS {
+            decm!(s, w[i]);
+        }
     }
     let duration = start.elapsed();
-    let encrypted_decrypted = unload128(w);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w2);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w3);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w4);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w5);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w6);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w7);
-    assert_eq!(encrypted_decrypted, plain);
-    let encrypted_decrypted = unload128(w8);
-    assert_eq!(encrypted_decrypted, plain);
-    println!("Ran {} iterations in {:?}", ITERATIONS, duration);
-    let bytes = 16f64 * ITERATIONS as f64 * 2f64;
+    for i in 0..SBS {
+        let encrypted_decrypted = unload128(w[i]);
+        assert_eq!(encrypted_decrypted, plain);
+    }
+    println!("Ran {} iterations in {:?}", ITERATIONS * SBS, duration);
+    let bytes = 16f64 * (ITERATIONS * SBS) as f64 * 2f64;
     let dur = duration.as_secs() as f64 
         + duration.subsec_nanos() as f64 * 1e-9;
     let mb = bytes / (1024f64 * 1024f64);
     println!("{:.1}MiB/s", mb/dur);
 }
 
+struct Report {
+    iterations: usize,
+    tid: usize
+}
+
+fn worker(tid: usize, ttx: mpsc::Sender<Report>) {
+    let key: [u8; 16] = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
+    let plain: [u8; 16] = [0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34];
+    let s = schedule(&key);
+    const SBS: usize = 16;
+    let mut w = [load128(&plain); SBS];
+    const ITERATIONS: usize = 100000000/SBS;
+    let mut its: usize = 0;
+    loop {
+        for _ in 0..ITERATIONS {
+            for i in 0..SBS {
+                encm!(s, w[i]);
+            }
+        }
+        for _ in 0..ITERATIONS {
+            for i in 0..SBS {
+                decm!(s, w[i]);
+            }
+        }
+        for i in 0..SBS {
+            let encrypted_decrypted = unload128(w[i]);
+            assert_eq!(encrypted_decrypted, plain);
+        }
+        its += 2 * ITERATIONS * SBS;
+        ttx.send(Report {iterations: its, tid: tid}).unwrap();
+    }
+}
+
+fn threader() {
+    let threads = num_cpus::get();
+    let mut handles = Vec::new();
+    let mut counts: Vec<usize> = Vec::new();
+    let (tx, rx) = mpsc::channel::<Report>();
+    
+    for t in 0..threads {
+        let tid = t;
+        let ttx = mpsc::Sender::clone(&tx);
+        handles.push(thread::spawn(move || {
+            worker(tid, ttx);
+        }));
+        counts.push(0);
+    }
+    drop(tx);
+    let start = Instant::now();
+    for recieved in rx {
+        let duration = start.elapsed();
+        counts[recieved.tid] = recieved.iterations;
+        let mut total_bytes: f64 = 0.0;
+        for t in 0..threads {
+            total_bytes += 16.0 * counts[t] as f64;
+        }
+        let dur = duration.as_secs() as f64 
+                + duration.subsec_nanos() as f64 * 1e-9;
+        let gib = total_bytes / (1024.0 * 1024.0 * 1024.0);
+        println!("{:.2}GiB/s", gib/dur);
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+}
+
 fn main() {
     smoke();
     simple_loop();
+    threader();
 }
