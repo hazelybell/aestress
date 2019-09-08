@@ -142,15 +142,50 @@ fn simple_loop() {
     let start = Instant::now();
     let s = schedule(&key);
     let mut w = load128(&plain);
-    const ITERATIONS: usize = 1000000;
-    for _ in 0..ITERATIONS {
+    let mut w2 = load128(&plain);
+    let mut w3 = load128(&plain);
+    let mut w4 = load128(&plain);
+    let mut w5 = load128(&plain);
+    let mut w6 = load128(&plain);
+    let mut w7 = load128(&plain);
+    let mut w8 = load128(&plain);
+    const ITERATIONS: usize = 10000000;
+    for _ in 0..ITERATIONS/8 {
         encm!(s, w);
+        encm!(s, w2);
+        encm!(s, w3);
+        encm!(s, w4);
+        encm!(s, w5);
+        encm!(s, w6);
+        encm!(s, w7);
+        encm!(s, w8);
     }
-    for _ in 0..ITERATIONS {
+    for _ in 0..ITERATIONS/8 {
         decm!(s, w);
+        decm!(s, w2);
+        decm!(s, w3);
+        decm!(s, w4);
+        decm!(s, w5);
+        decm!(s, w6);
+        decm!(s, w7);
+        decm!(s, w8);
     }
     let duration = start.elapsed();
     let encrypted_decrypted = unload128(w);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w2);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w3);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w4);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w5);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w6);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w7);
+    assert_eq!(encrypted_decrypted, plain);
+    let encrypted_decrypted = unload128(w8);
     assert_eq!(encrypted_decrypted, plain);
     println!("Ran {} iterations in {:?}", ITERATIONS, duration);
     let bytes = 16f64 * ITERATIONS as f64 * 2f64;
@@ -158,7 +193,6 @@ fn simple_loop() {
         + duration.subsec_nanos() as f64 * 1e-9;
     let mb = bytes / (1024f64 * 1024f64);
     println!("{:.1}MiB/s", mb/dur);
-    
 }
 
 fn main() {
