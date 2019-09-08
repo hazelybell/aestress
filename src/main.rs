@@ -278,33 +278,53 @@ fn worker_x(tid: usize, ttx: mpsc::Sender<Report>) {
                 unsafe {
                     w[i] = _mm_xor_si128(w[i], s.0[10]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[11]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[12]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[13]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[14]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[15]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[16]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[17]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[18]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdec_si128(w[i], s.0[19]);
                 }
+            }
+            for i in 0..SBS {
                 unsafe {
                     w[i] = _mm_aesdeclast_si128(w[i], s.0[0]);
                 }
