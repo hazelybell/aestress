@@ -1,0 +1,7 @@
+[package]
+name = "aestress"
+version = "0.1.0"
+authors = ["Hazel Victoria Campbell <github@orezpraw.com>"]
+edition = "2018"
+
+[dependencies]
