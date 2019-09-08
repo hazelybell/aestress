@@ -1,3 +1,6 @@
+#![warn(rust_2018_idioms)]
+#![allow(dead_code)]
+
 #[cfg(
     not(all(
         any(target_arch = "x86", target_arch = "x86_64"),
@@ -11,11 +14,11 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use std::thread;
 use std::sync::mpsc;
 
-extern crate num_cpus;
+use num_cpus;
 
 struct Schedule([__m128i; 20]);
 
@@ -204,6 +207,119 @@ fn worker(tid: usize, ttx: mpsc::Sender<Report>) {
     }
 }
 
+fn worker_x(tid: usize, ttx: mpsc::Sender<Report>) {
+    let key: [u8; 16] = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
+    let plain: [u8; 16] = [0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34];
+    let s = schedule(&key);
+    const SBS: usize = 4;
+    let mut w = [load128(&plain); SBS];
+    const ITERATIONS: usize = 100000000/SBS;
+    let mut its: usize = 0;
+    loop {
+        for _ in 0..ITERATIONS {
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_xor_si128(w[i], s.0[0]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[1]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[2]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[3]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[4]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[5]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[6]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[7]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[8]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenc_si128(w[i], s.0[9]);
+                }
+            }
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_aesenclast_si128(w[i], s.0[10]);
+                }
+            }
+        }
+        for _ in 0..ITERATIONS {
+            for i in 0..SBS {
+                unsafe {
+                    w[i] = _mm_xor_si128(w[i], s.0[10]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[11]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[12]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[13]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[14]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[15]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[16]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[17]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[18]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdec_si128(w[i], s.0[19]);
+                }
+                unsafe {
+                    w[i] = _mm_aesdeclast_si128(w[i], s.0[0]);
+                }
+            }
+        }
+        for i in 0..SBS {
+            let encrypted_decrypted = unload128(w[i]);
+            assert_eq!(encrypted_decrypted, plain);
+        }
+        its += 2 * ITERATIONS * SBS;
+        ttx.send(Report {iterations: its, tid: tid}).unwrap();
+    }
+}
+
+
 fn threader() {
     let threads = num_cpus::get();
     let mut handles = Vec::new();
@@ -214,7 +330,7 @@ fn threader() {
         let tid = t;
         let ttx = mpsc::Sender::clone(&tx);
         handles.push(thread::spawn(move || {
-            worker(tid, ttx);
+            worker_x(tid, ttx);
         }));
         counts.push(0);
     }
